@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meet Copilot</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262a33; --text: #e7e9ee; --muted: #8b93a3;
+    --accent: #7aa2ff; --them: #f2c66d; --me: #79d9a6; --warn: #ff8a7a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #status { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--line); color: var(--muted); }
+  #status.listening { background: #1d3b2b; color: var(--me); }
+  #status.listening::before { content: "● "; animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  header .spacer { flex: 1; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; background: var(--accent); color: #0b1020; font-weight: 600; }
+  button.ghost { background: var(--line); color: var(--text); font-weight: 500; }
+  button.danger { background: var(--warn); }
+  button:disabled { opacity: .5; cursor: default; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.15fr 1fr; }
+  section { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+  section:last-child { border-right: 0; }
+  section > h2 { margin: 0; padding: 10px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .scroll { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .line { margin-bottom: 12px; }
+  .line .who { font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+  .line.them .who { color: var(--them); }
+  .line.me .who { color: var(--me); }
+  .line .es { font-size: 17px; }
+  .line .src { color: var(--muted); font-size: 13px; }
+  .line.pending .es { color: var(--muted); font-style: italic; font-size: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+  .question { border-color: var(--them); }
+  .question .body { color: var(--them); font-weight: 600; }
+  .suggestion { cursor: pointer; padding: 10px 12px; border-radius: 8px; background: #1e2330; margin-top: 8px; }
+  .suggestion:hover { background: #252b3b; }
+  .suggestion .en { font-size: 18px; font-weight: 600; }
+  .suggestion .es { color: var(--muted); font-size: 13px; }
+  .suggestion.copied::after { content: "copiado"; float: right; font-size: 11px; color: var(--me); }
+  ul { margin: 4px 0 0; padding-left: 18px; }
+  .ask { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+  input, textarea, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+  textarea { min-height: 120px; resize: vertical; }
+  .thinking { color: var(--muted); font-size: 12px; padding: 0 16px 6px; height: 18px; }
+  #errors { position: fixed; bottom: 16px; left: 16px; max-width: 460px; }
+  .error { background: #3a1d1d; color: var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 8px; font-size: 13px; }
+  #setup { max-width: 780px; margin: 0 auto; padding: 24px 16px; overflow-y: auto; width: 100%; }
+  #setup h2 { font-size: 18px; margin: 0 0 16px; }
+  .field { margin-bottom: 16px; }
+  .field > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .checks { max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .checks label { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 14px; }
+  .checks input { width: auto; }
+  .checks a { color: var(--accent); font-size: 12px; margin-left: auto; cursor: pointer; }
+  pre.preview, .markdown { white-space: pre-wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 240px; overflow-y: auto; font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--muted); }
+  .markdown { max-height: none; color: var(--text); font-family: inherit; font-size: 14px; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .hidden { display: none !important; }
+  .history-summary { font-size: 13px; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Meet Copilot</h1>
+  <span id="status">detenido</span>
+  <span id="title" class="hint"></span>
+  <span class="spacer"></span>
+  <button id="stop" class="danger hidden">Terminar llamada</button>
+  <button id="quit" class="ghost">Salir</button>
+</header>
+
+<div id="setup">
+  <h2>Preparar la llamada</h2>
+  <div class="field">
+    <label for="callTitle">Nombre de la llamada</label>
+    <input id="callTitle" placeholder="Ej. Demo con Acme — SSO y pricing">
+  </div>
+  <div class="field">
+    <label for="brief">Brief preparado con <code>/meet-prep</code></label>
+    <select id="brief"><option value="">Sin brief</option></select>
+    <pre id="briefPreview" class="preview hidden"></pre>
+  </div>
+  <div class="field">
+    <label for="notes">Mis notas y contexto (objetivo de la llamada, lo que quiero lograr, datos que no puedo decir…)</label>
+    <textarea id="notes" placeholder="Quiero cerrar fecha de piloto. No comprometer precio sin hablar con X. Ellos vienen de usar Stripe…"></textarea>
+  </div>
+  <div class="field">
+    <label>Incluir llamadas anteriores como contexto</label>
+    <div id="previous" class="checks"><span class="hint">Todavía no hay llamadas guardadas.</span></div>
+  </div>
+  <button id="start">Empezar a escuchar</button>
+  <p class="hint">Escucha el audio del Mac (lo que dicen los demás en Meet) y tu micrófono. Usa audífonos para no duplicar las voces de los demás.</p>
+  <div id="lastSummary" class="hidden">
+    <h2>Resumen de la llamada</h2>
+    <div class="markdown" id="lastSummaryBody"></div>
+  </div>
+</div>
+
+<main id="live" class="hidden">
+  <section>
+    <h2>Traducción en vivo</h2>
+    <div class="scroll" id="transcript"></div>
+  </section>
+  <section>
+    <h2>Copiloto</h2>
+    <div class="scroll" id="advice"><p class="hint">Las sugerencias aparecen cuando te hagan una pregunta o cada ~20 segundos de conversación.</p></div>
+    <div class="thinking" id="thinking"></div>
+    <form class="ask" id="askForm">
+      <input id="question" placeholder="Pregúntale algo al copiloto (solo tú lo ves)…" autocomplete="off">
+      <button>Preguntar</button>
+    </form>
+  </section>
+</main>
+
+<div id="errors"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const lines = new Map();
+let following = true;
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+async function api(path, body) {
+  const response = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || response.statusText);
+  return payload;
+}
+
+function showError(message) {
+  const node = el("div", "error", message);
+  $("errors").appendChild(node);
+  setTimeout(() => node.remove(), 9000);
+}
+
+function setStatus(state) {
+  const labels = { listening: "escuchando", closing: "cerrando…", summarizing: "resumiendo…", idle: "detenido" };
+  $("status").textContent = labels[state] || state;
+  $("status").className = state;
+  const live = state === "listening" || state === "closing" || state === "summarizing";
+  $("live").classList.toggle("hidden", !live);
+  $("setup").classList.toggle("hidden", live);
+  $("stop").classList.toggle("hidden", state !== "listening");
+}
+
+async function loadState() {
+  const state = await api("/api/state");
+  const brief = $("brief");
+  brief.length = 1;
+  for (const name of state.briefs) brief.add(new Option(name.replace(/\.md$/, ""), name));
+  const previous = $("previous");
+  previous.replaceChildren();
+  if (!state.sessions.length) previous.appendChild(el("span", "hint", "Todavía no hay llamadas guardadas."));
+  for (const meta of state.sessions) {
+    const row = el("label");
+    const box = el("input");
+    box.type = "checkbox"; box.value = meta.id; box.disabled = !meta.has_summary;
+    const date = new Date(meta.started_at * 1000).toLocaleString("es", { dateStyle: "medium", timeStyle: "short" });
+    row.append(box, el("span", null, `${meta.title} · ${date}${meta.has_summary ? "" : " (sin resumen)"}`));
+    if (meta.has_summary) {
+      const view = el("a", null, "ver");
+      view.onclick = async (event) => {
+        event.preventDefault();
+        const { content } = await api(`/api/session-file?id=${encodeURIComponent(meta.id)}&name=summary.md`);
+        showSummary(meta.title, content);
+      };
+      row.appendChild(view);
+    }
+    previous.appendChild(row);
+  }
+  if (state.running) { $("title").textContent = state.title; setStatus("listening"); }
+}
+
+function showSummary(title, markdown) {
+  $("lastSummary").classList.remove("hidden");
+  $("lastSummary").querySelector("h2").textContent = title;
+  $("lastSummaryBody").textContent = markdown || "Sin resumen.";
+}
+
+$("brief").onchange = async () => {
+  const name = $("brief").value;
+  $("briefPreview").classList.toggle("hidden", !name);
+  if (!name) return;
+  const { content } = await api(`/api/brief?name=${encodeURIComponent(name)}`);
+  $("briefPreview").textContent = content;
+  if (!$("callTitle").value) $("callTitle").value = name.replace(/\.md$/, "").replace(/^\d{4}-\d{2}-\d{2}-?/, "").replace(/-/g, " ");
+};
+
+$("start").onclick = async () => {
+  $("start").disabled = true;
+  try {
+    const previous = [...document.querySelectorAll("#previous input:checked")].map((box) => box.value);
+    $("transcript").replaceChildren();
+    lines.clear();
+    await api("/api/start", { title: $("callTitle").value, brief: $("brief").value, notes: $("notes").value, previous });
+    $("title").textContent = $("callTitle").value;
+  } catch (error) { showError(error.message); }
+  finally { $("start").disabled = false; }
+};
+
+$("stop").onclick = async () => {
+  try { await api("/api/stop", {}); } catch (error) { showError(error.message); }
+};
+
+$("quit").onclick = async () => {
+  try {
+    await api("/api/quit", {});
+    document.body.replaceChildren(el("p", "hint", "Meet Copilot se cerró. Puedes cerrar esta pestaña."));
+  } catch (error) { showError(error.message); }
+};
+
+$("askForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const question = $("question").value.trim();
+  if (!question) return;
+  try { await api("/api/ask", { question }); $("question").value = ""; } catch (error) { showError(error.message); }
+};
+
+$("transcript").addEventListener("scroll", () => {
+  const box = $("transcript");
+  following = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+});
+
+function scrollTranscript() {
+  if (following) $("transcript").scrollTop = $("transcript").scrollHeight;
+}
+
+function renderLine(line) {
+  if (lines.has(line.id)) return;
+  const node = el("div", `line ${line.speaker}`);
+  const needsTranslation = line.language !== "es";
+  node.append(
+    el("div", "who", line.speaker === "me" ? "YO" : "ELLOS"),
+    el("div", "es", needsTranslation ? "traduciendo…" : line.text),
+  );
+  if (needsTranslation) node.classList.add("pending");
+  node.appendChild(el("div", "src", needsTranslation ? line.text : ""));
+  lines.set(line.id, node);
+  $("transcript").appendChild(node);
+  scrollTranscript();
+}
+
+function renderTranslation({ id, translation }) {
+  const node = lines.get(id);
+  if (!node) return;
+  node.classList.remove("pending");
+  node.querySelector(".es").textContent = translation;
+  scrollTranscript();
+}
+
+function renderAdvice(advice) {
+  $("thinking").textContent = "";
+  const box = $("advice");
+  box.replaceChildren();
+  if (advice.consulta) {
+    const card = el("div", "card");
+    card.append(el("div", "label", "Tu consulta"), el("div", null, advice.consulta));
+    box.appendChild(card);
+  }
+  if (advice.pregunta) {
+    const card = el("div", "card question");
+    card.append(el("div", "label", "Te están preguntando"), el("div", "body", advice.pregunta));
+    box.appendChild(card);
+  }
+  if (advice.nota) {
+    const card = el("div", "card");
+    card.append(el("div", "label", advice.consulta ? "Respuesta" : "Ojo"), el("div", null, advice.nota));
+    box.appendChild(card);
+  }
+  if (advice.sugerencias.length) {
+    const card = el("div", "card");
+    card.appendChild(el("div", "label", "Puedes decir (clic para copiar)"));
+    for (const suggestion of advice.sugerencias) {
+      const item = el("div", "suggestion");
+      item.append(el("div", "en", suggestion.en), el("div", "es", suggestion.es));
+      item.onclick = () => {
+        navigator.clipboard.writeText(suggestion.en);
+        item.classList.add("copied");
+        setTimeout(() => item.classList.remove("copied"), 1500);
+      };
+      card.appendChild(item);
+    }
+    box.appendChild(card);
+  }
+  if (advice.resumen) {
+    const card = el("div", "card");
+    card.append(el("div", "label", "De qué se está hablando"), el("div", null, advice.resumen));
+    box.appendChild(card);
+  }
+  if (advice.pendientes.length) {
+    const card = el("div", "card");
+    const list = el("ul");
+    for (const item of advice.pendientes) list.appendChild(el("li", null, item));
+    card.append(el("div", "label", "Pendientes"), list);
+    box.appendChild(card);
+  }
+}
+
+function connect() {
+  const events = new EventSource("/api/events");
+  const on = (type, handler) => events.addEventListener(type, (event) => handler(JSON.parse(event.data)));
+  on("status", (data) => {
+    setStatus(data.state);
+    if (data.state === "idle") loadState();
+  });
+  on("line", renderLine);
+  on("translation", renderTranslation);
+  on("advice", renderAdvice);
+  on("thinking", (data) => { $("thinking").textContent = data.question ? "Pensando tu consulta…" : "Analizando la conversación…"; });
+  on("error", (data) => { $("thinking").textContent = ""; showError(data.message); });
+  on("summary", (data) => showSummary($("title").textContent || "Resumen de la llamada", data.markdown));
+}
+
+loadState().catch((error) => showError(error.message));
+connect();
+</script>
+</body>
+</html>

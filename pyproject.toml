@@ -1,0 +1,36 @@
+[project]
+name = "meet-copilot"
+version = "0.1.0"
+description = "Traductor y copiloto en vivo para llamadas de Google Meet"
+readme = "README.md"
+authors = [
+    { name = "Willintong-dev", email = "willintong.ramirez@y.uno" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "claude-agent-sdk>=0.2.178",
+    "mlx-whisper>=0.4.3",
+    "numpy>=2.5.4",
+    "pyobjc-core>=13.0",
+    "pyobjc-framework-avfoundation>=13.0",
+    "pyobjc-framework-cocoa>=13.0",
+    "pyobjc-framework-coremedia>=13.0",
+    "pyobjc-framework-screencapturekit>=13.0",
+    "sounddevice>=0.5.6",
+    "webrtcvad-wheels>=2.0.14.post1",
+]
+
+[project.scripts]
+meet-copilot = "meet_copilot.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,10 @@
+user_name = "Willintong"
+call_language = "en"
+my_language = "es"
+translator_model = "haiku"
+copilot_model = "sonnet"
+port = 8777
+silence_ms = 500
+max_segment_seconds = 12
+copilot_interval_seconds = 20
+capture_microphone = true
