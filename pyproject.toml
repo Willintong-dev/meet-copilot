@@ -3,6 +3,7 @@ name = "meet-copilot"
 version = "0.1.0"
 description = "Traductor y copiloto en vivo para llamadas de Google Meet"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Willintong-dev", email = "154470943+Willintong-dev@users.noreply.github.com" }
 ]

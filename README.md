@@ -138,3 +138,7 @@ uv run meet-copilot --no-browser --port 8790
 ## Aviso
 
 Avisa a los participantes cuando transcribas una llamada; en varias jurisdicciones es obligatorio.
+
+## Licencia
+
+[MIT](LICENSE).
