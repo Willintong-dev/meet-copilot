@@ -42,10 +42,13 @@ class SessionStore:
     def record_advice(self, advice):
         self._append("copilot.jsonl", {"at": time.time(), **advice})
 
-    def finish(self, lines, summary):
+    def record_answer(self, answer):
+        self._append("answers.jsonl", answer)
+
+    def finish(self, lines, summary, answers=()):
         self.meta["ended_at"] = time.time()
         self._write_meta()
-        (self.dir / "transcript.md").write_text(render_transcript(lines))
+        (self.dir / "transcript.md").write_text(render_answers(answers) + render_transcript(lines))
         if summary:
             (self.dir / "summary.md").write_text(summary)
 
@@ -67,6 +70,23 @@ def render_transcript(lines):
             rendered.append(f"> {line.translation}")
         rendered.append("")
     return "\n".join(rendered)
+
+
+def render_answers(answers):
+    if not answers:
+        return ""
+    rendered = ["## Preguntas y respuestas sugeridas", ""]
+    for answer in answers:
+        clock = time.strftime("%H:%M:%S", time.localtime(answer["started_at"]))
+        rendered.append(f"**{clock}** {answer['original']}")
+        if answer.get("pregunta_es"):
+            rendered.append(f"> {answer['pregunta_es']}")
+        rendered.append(f"- Sugerido: {answer['respuesta_en']}")
+        if answer.get("respuesta_es"):
+            rendered.append(f"- {answer['respuesta_es']}")
+        rendered.append("")
+    rendered.extend(["## Transcripción", ""])
+    return "\n".join(rendered) + "\n"
 
 
 def list_sessions(sessions_dir):

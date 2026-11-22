@@ -8,6 +8,7 @@ from meet_copilot.store import (
     list_sessions,
     read_brief,
     read_session_file,
+    render_answers,
     slugify,
 )
 
@@ -51,3 +52,18 @@ def test_briefs_listed_newest_first_and_only_markdown(tmp_path):
 def test_compose_context_skips_empty_parts():
     context = compose_context("  ", "Brief", [("Llamada 1", "Resumen 1"), ("Llamada 2", "")])
     assert context == "## Brief preparado\nBrief\n\n## Llamada anterior: Llamada 1\nResumen 1"
+
+
+def test_answers_are_rendered_before_the_transcript(tmp_path):
+    store = SessionStore(tmp_path, "Demo", "", now=lambda: 1_700_000_000)
+    answer = {"started_at": 1_700_000_001, "original": "Any questions?", "pregunta_es": "¿Preguntas?", "respuesta_en": "Not for now.", "respuesta_es": "Por ahora no."}
+    store.record_answer(answer)
+    store.finish([Line(0, "them", "Any questions?", "en", 1_700_000_001)], "", [answer])
+    transcript = (store.dir / "transcript.md").read_text()
+    assert transcript.index("## Preguntas y respuestas sugeridas") < transcript.index("## Transcripción") < transcript.index("Ellos:")
+    assert "- Sugerido: Not for now." in transcript
+    assert json.loads((store.dir / "answers.jsonl").read_text())["original"] == "Any questions?"
+
+
+def test_no_answers_renders_nothing():
+    assert render_answers([]) == ""

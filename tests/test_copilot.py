@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from meet_copilot.copilot import Copilot, looks_like_question, normalize_advice, render_lines, should_consult
+from meet_copilot.copilot import Copilot, normalize_advice, render_lines, should_consult
 from meet_copilot.store import Line
 from tests.fakes import ADVICE, FakeChat, advice_or_summary, settings
 
@@ -11,26 +11,8 @@ def line(speaker, text, index=0):
     return Line(index, speaker, text, "en", 0.0)
 
 
-@pytest.mark.parametrize(
-    "text, expected",
-    [
-        ("What do you think about the timeline?", True),
-        ("Could you share the deck", True),
-        ("Do you support SSO", True),
-        ("We shipped the release yesterday.", False),
-        ("Is the API stable", False),
-    ],
-)
-def test_looks_like_question(text, expected):
-    assert looks_like_question(text) is expected
-
-
-def test_consults_immediately_when_they_ask_a_question():
-    assert should_consult([line("them", "Can you send it?")], 1, 20)
-
-
-def test_does_not_consult_on_own_question():
-    assert not should_consult([line("me", "Can you send it?")], 1, 20)
+def test_questions_wait_for_the_interval_because_the_responder_answers_them():
+    assert not should_consult([line("them", "Can you send it?")], 1, 20)
 
 
 def test_consults_after_interval_or_enough_lines():
@@ -89,3 +71,5 @@ def test_summarize_uses_full_transcript_and_fresh_prompt(tmp_path):
     assert summary.startswith("## Resumen")
     assert "Let's do the pilot in March." in chat.prompts[-1]
     assert "Resumes llamadas" in chat.resets[-1]
+    assert "## Dudas que quedaron abiertas" in chat.prompts[-1]
+    assert "## Términos y herramientas mencionados" in chat.prompts[-1]

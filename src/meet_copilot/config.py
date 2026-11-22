@@ -15,6 +15,8 @@ class Settings:
     my_language: str = "es"
     translator_model: str = "haiku"
     copilot_model: str = "sonnet"
+    answer_model: str = "haiku"
+    answer_length: str = "desarrollada"
     host: str = "127.0.0.1"
     port: int = 8777
     silence_ms: int = 500
@@ -23,6 +25,7 @@ class Settings:
     copilot_max_turns: int = 50
     echo_overlap_ratio: float = 0.5
     capture_microphone: bool = True
+    echo_window_seconds: float = 6.0
 
     @property
     def sessions_dir(self):

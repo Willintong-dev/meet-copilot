@@ -17,6 +17,7 @@ class FakeSession:
     def __init__(self, config, bus, transcriber, runner, title, context, sources):
         self.title = title
         self.context = context
+        self.config = config
         self.bus = bus
         self.questions = []
         self.stopped = threading.Event()
@@ -70,6 +71,7 @@ def test_state_lists_briefs_and_sessions(app):
     assert state["briefs"] == ["2026-11-05-acme.md"]
     assert state["sessions"][0]["id"] == previous_id
     assert state["running"] is False
+    assert state["answer_length"] == "desarrollada"
 
 
 def test_start_composes_context_and_rejects_second_start(app):
@@ -126,3 +128,13 @@ def test_quit_stops_running_session_and_server(tmp_path):
     server.server_close()
     assert not thread.is_alive()
     assert session.stopped.is_set()
+
+
+def test_start_applies_answer_length_only_to_that_call(app):
+    controller, base, _ = app
+    call(base, "/api/start", {"title": "Demo", "answer_length": "breve"})
+    assert FakeSession.instances[-1].config.answer_length == "breve"
+    assert controller.settings.answer_length == "desarrollada"
+    call(base, "/api/stop", {})
+    call(base, "/api/start", {"title": "Otra", "answer_length": "inventada"})
+    assert FakeSession.instances[-1].config.answer_length == "desarrollada"

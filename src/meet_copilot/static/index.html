@@ -8,6 +8,7 @@
   :root {
     --bg: #0f1115; --panel: #171a21; --line: #262a33; --text: #e7e9ee; --muted: #8b93a3;
     --accent: #7aa2ff; --them: #f2c66d; --me: #79d9a6; --warn: #ff8a7a;
+    --answer: #c9a7f0; --answer-ink: #141626;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
@@ -63,6 +64,28 @@
   .hint { color: var(--muted); font-size: 12px; }
   .hidden { display: none !important; }
   .history-summary { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  #ticks { position: relative; flex: 1; height: 16px; min-width: 40px; border-bottom: 1px solid var(--line); }
+  #ticks button { position: absolute; bottom: 0; left: calc(var(--at) * 100%); width: 3px; height: 10px; padding: 0; border-radius: 1px; background: var(--them); }
+  #ticks button:hover { height: 14px; }
+  .line { border-left: 2px solid transparent; padding-left: 8px; margin-left: -10px; scroll-margin-top: 12px; }
+  .line.asked { border-left-color: var(--them); }
+  .line.flash { background: color-mix(in srgb, var(--them) 14%, transparent); }
+  #answer { position: relative; padding: 13px 44px 15px 16px; background: var(--answer); color: var(--answer-ink); animation: enter 260ms cubic-bezier(.2,.8,.3,1); }
+  @keyframes enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  #answer .tag { display: block; margin-bottom: 8px; font: 600 10px/1 ui-monospace, Menlo, monospace; letter-spacing: .18em; color: color-mix(in srgb, var(--answer-ink) 55%, transparent); }
+  #answer .asked-es { margin: 0 0 8px; font-size: 13px; color: color-mix(in srgb, var(--answer-ink) 68%, transparent); }
+  #answer .pair { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: baseline; padding: 7px 0; }
+  #answer .pair + .pair { border-top: 1px solid color-mix(in srgb, var(--answer-ink) 18%, transparent); }
+  #answer .lang { font: 600 10px ui-monospace, Menlo, monospace; letter-spacing: .1em; color: color-mix(in srgb, var(--answer-ink) 45%, transparent); }
+  #answer .say { margin: 0; font-size: 19px; font-weight: 700; line-height: 1.4; cursor: pointer; }
+  #answer .say.copied::after { content: " · copiado"; font-size: 11px; font-weight: 500; }
+  #answer .means { margin: 0; font-size: 16px; font-weight: 500; line-height: 1.4; color: color-mix(in srgb, var(--answer-ink) 82%, transparent); }
+  #answer mark { background: color-mix(in srgb, var(--answer-ink) 10%, transparent); color: inherit; border-bottom: 2px dashed color-mix(in srgb, var(--answer-ink) 50%, transparent); border-radius: 3px 3px 0 0; padding: 0 3px; }
+  #answer .meta { display: block; margin-top: 9px; font: 9px ui-monospace, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: color-mix(in srgb, var(--answer-ink) 48%, transparent); }
+  #answer .close { position: absolute; top: 8px; right: 10px; padding: 3px 8px; background: transparent; color: color-mix(in srgb, var(--answer-ink) 55%, transparent); font-size: 16px; }
+  #answer .close:hover { background: rgb(0 0 0 / .1); }
+  #liveWrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  @media (prefers-reduced-motion: reduce) { #answer, #status.listening::before { animation: none; } }
 </style>
 </head>
 <body>
@@ -70,7 +93,8 @@
   <h1>Meet Copilot</h1>
   <span id="status">detenido</span>
   <span id="title" class="hint"></span>
-  <span class="spacer"></span>
+  <div id="ticks" class="hidden" title="Preguntas detectadas: clic para ir a una"></div>
+  <span id="spacer" class="spacer"></span>
   <button id="stop" class="danger hidden">Terminar llamada</button>
   <button id="quit" class="ghost">Salir</button>
 </header>
@@ -91,6 +115,13 @@
     <textarea id="notes" placeholder="Quiero cerrar fecha de piloto. No comprometer precio sin hablar con X. Ellos vienen de usar Stripe…"></textarea>
   </div>
   <div class="field">
+    <label for="answerLength">Extensión de las respuestas sugeridas</label>
+    <select id="answerLength">
+      <option value="desarrollada">Desarrollada: 2 o 3 frases con sustancia</option>
+      <option value="breve">Breve: una frase, para salir del paso</option>
+    </select>
+  </div>
+  <div class="field">
     <label>Incluir llamadas anteriores como contexto</label>
     <div id="previous" class="checks"><span class="hint">Todavía no hay llamadas guardadas.</span></div>
   </div>
@@ -102,14 +133,16 @@
   </div>
 </div>
 
-<main id="live" class="hidden">
+<div id="liveWrap" class="hidden">
+<div id="answer" class="hidden"></div>
+<main id="live">
   <section>
     <h2>Traducción en vivo</h2>
     <div class="scroll" id="transcript"></div>
   </section>
   <section>
     <h2>Copiloto</h2>
-    <div class="scroll" id="advice"><p class="hint">Las sugerencias aparecen cuando te hagan una pregunta o cada ~20 segundos de conversación.</p></div>
+    <div class="scroll" id="advice"><p class="hint">Las preguntas se responden al instante en la franja de arriba. Aquí va la visión de conjunto, cada ~20 segundos de conversación.</p></div>
     <div class="thinking" id="thinking"></div>
     <form class="ask" id="askForm">
       <input id="question" placeholder="Pregúntale algo al copiloto (solo tú lo ves)…" autocomplete="off">
@@ -117,13 +150,19 @@
     </form>
   </section>
 </main>
+</div>
 
 <div id="errors"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const lines = new Map();
+const ANSWER_SECONDS = 90;
+const PENDING_SECONDS = 8;
+const TICK_SPAN_MS = 90 * 60000;
 let following = true;
+let sessionStart = null;
+let hideAnswer = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -152,13 +191,16 @@ function setStatus(state) {
   $("status").textContent = labels[state] || state;
   $("status").className = state;
   const live = state === "listening" || state === "closing" || state === "summarizing";
-  $("live").classList.toggle("hidden", !live);
+  $("liveWrap").classList.toggle("hidden", !live);
+  $("ticks").classList.toggle("hidden", !live);
+  $("spacer").classList.toggle("hidden", live);
   $("setup").classList.toggle("hidden", live);
   $("stop").classList.toggle("hidden", state !== "listening");
 }
 
 async function loadState() {
   const state = await api("/api/state");
+  $("answerLength").value = localStorage.getItem("answerLength") || state.answer_length;
   const brief = $("brief");
   brief.length = 1;
   for (const name of state.briefs) brief.add(new Option(name.replace(/\.md$/, ""), name));
@@ -204,9 +246,10 @@ $("start").onclick = async () => {
   $("start").disabled = true;
   try {
     const previous = [...document.querySelectorAll("#previous input:checked")].map((box) => box.value);
-    $("transcript").replaceChildren();
-    lines.clear();
-    await api("/api/start", { title: $("callTitle").value, brief: $("brief").value, notes: $("notes").value, previous });
+    resetLive();
+    const answerLength = $("answerLength").value;
+    try { localStorage.setItem("answerLength", answerLength); } catch {}
+    await api("/api/start", { title: $("callTitle").value, brief: $("brief").value, notes: $("notes").value, previous, answer_length: answerLength });
     $("title").textContent = $("callTitle").value;
   } catch (error) { showError(error.message); }
   finally { $("start").disabled = false; }
@@ -239,8 +282,107 @@ function scrollTranscript() {
   if (following) $("transcript").scrollTop = $("transcript").scrollHeight;
 }
 
+function resetLive() {
+  $("transcript").replaceChildren();
+  $("ticks").replaceChildren();
+  $("answer").classList.add("hidden");
+  lines.clear();
+  sessionStart = null;
+}
+
+function markLines(ids, asked) {
+  for (const id of ids) lines.get(id)?.classList.toggle("asked", asked);
+}
+
+function addTick(answer) {
+  const key = String(answer.ids[0]);
+  if ($("ticks").querySelector(`[data-line="${key}"]`)) return;
+  const tick = el("button");
+  tick.dataset.line = key;
+  tick.type = "button";
+  tick.title = `${clock(answer.started_at)} · ${answer.original}`;
+  tick.style.setProperty("--at", Math.min(0.99, (answer.started_at - (sessionStart ?? answer.started_at)) * 1000 / TICK_SPAN_MS));
+  tick.onclick = () => {
+    const node = lines.get(answer.ids[0]);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.classList.add("flash");
+    setTimeout(() => node.classList.remove("flash"), 1800);
+  };
+  $("ticks").appendChild(tick);
+}
+
+function clock(seconds) {
+  return new Date(seconds * 1000).toLocaleTimeString("es-CO", { hour12: false });
+}
+
+function showAnswerBox(seconds) {
+  const box = $("answer");
+  box.classList.remove("hidden");
+  box.style.animation = "none";
+  box.offsetHeight;
+  box.style.animation = "";
+  clearTimeout(hideAnswer);
+  hideAnswer = setTimeout(() => box.classList.add("hidden"), seconds * 1000);
+}
+
+function renderPendingQuestion(question) {
+  markLines(question.ids, true);
+  const box = $("answer");
+  box.replaceChildren(el("span", "tag", "EVALUANDO PREGUNTA…"), el("p", "asked-es", question.text));
+  showAnswerBox(PENDING_SECONDS);
+}
+
+function renderDismissed({ ids }) {
+  markLines(ids, false);
+  const tag = $("answer").querySelector(".tag");
+  if (tag && tag.textContent.startsWith("EVALUANDO")) $("answer").classList.add("hidden");
+}
+
+function withAssumptions(node, text) {
+  for (const piece of text.split(/(\[[^\]]+\])/)) {
+    if (!piece) continue;
+    node.appendChild(piece.startsWith("[") && piece.endsWith("]") ? el("mark", null, piece.slice(1, -1)) : document.createTextNode(piece));
+  }
+  return node;
+}
+
+function pair(lang, className, text) {
+  const row = el("div", "pair");
+  row.append(el("span", "lang", lang), withAssumptions(el("p", className), text));
+  return row;
+}
+
+function renderAnswer(answer) {
+  markLines(answer.ids, true);
+  addTick(answer);
+  const box = $("answer");
+  box.replaceChildren(el("span", "tag", answer.dirigida_a_mi ? "TE PREGUNTARON A TI · DI ESTO" : "PUEDES RESPONDER"));
+  if (answer.pregunta_es) box.appendChild(el("p", "asked-es", answer.pregunta_es));
+  if (answer.respuesta_es) box.appendChild(pair("ES", "means", answer.respuesta_es));
+  const spoken = pair("EN", "say", answer.respuesta_en);
+  const say = spoken.querySelector(".say");
+  say.title = "Clic para copiar";
+  say.onclick = () => {
+    navigator.clipboard.writeText(answer.respuesta_en.replace(/[\[\]]/g, ""));
+    say.classList.add("copied");
+    setTimeout(() => say.classList.remove("copied"), 1500);
+  };
+  box.appendChild(spoken);
+  const assumptions = (answer.respuesta_en.match(/\[[^\]]+\]/g) || []).length;
+  const confidence = `confianza ${answer.confianza || "—"}`;
+  box.appendChild(el("span", "meta", assumptions ? `lo subrayado es un supuesto · ${confidence}` : confidence));
+  const close = el("button", "close", "×");
+  close.type = "button";
+  close.title = "Cerrar";
+  close.onclick = () => box.classList.add("hidden");
+  box.appendChild(close);
+  showAnswerBox(ANSWER_SECONDS);
+}
+
 function renderLine(line) {
   if (lines.has(line.id)) return;
+  sessionStart ??= line.started_at;
   const node = el("div", `line ${line.speaker}`);
   const needsTranslation = line.language !== "es";
   node.append(
@@ -320,6 +462,9 @@ function connect() {
   on("line", renderLine);
   on("translation", renderTranslation);
   on("advice", renderAdvice);
+  on("question", renderPendingQuestion);
+  on("question_dismissed", renderDismissed);
+  on("answer", renderAnswer);
   on("thinking", (data) => { $("thinking").textContent = data.question ? "Pensando tu consulta…" : "Analizando la conversación…"; });
   on("error", (data) => { $("thinking").textContent = ""; showError(data.message); });
   on("summary", (data) => showSummary($("title").textContent || "Resumen de la llamada", data.markdown));

@@ -88,6 +88,24 @@ ADVICE = {
 }
 
 
+ANSWER = {
+    "es_pregunta": True,
+    "dirigida_a_mi": True,
+    "pregunta_es": "¿Puedes compartir los precios?",
+    "respuesta_en": "Sure, I will send [the pricing sheet] today.",
+    "respuesta_es": "Claro, envío [la hoja de precios] hoy.",
+    "confianza": "alta",
+}
+
+
+def answer_questions(prompt):
+    return json.dumps(ANSWER, ensure_ascii=False)
+
+
+def three_chats():
+    return (FakeChat("haiku", echo_translation), FakeChat("sonnet", advice_or_summary), FakeChat("haiku", answer_questions))
+
+
 def advice_or_summary(prompt):
     if prompt.startswith("Transcripción completa"):
         return "## Resumen\nHablaron de precios."

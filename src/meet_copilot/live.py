@@ -6,6 +6,8 @@ from dataclasses import asdict
 
 from meet_copilot.claude import ClaudeChat
 from meet_copilot.copilot import Copilot, should_consult
+from meet_copilot.questions import SentenceBuffer, is_question, similar
+from meet_copilot.responder import Responder, responder_prompt
 from meet_copilot.segmenter import ActivityLog, Segmenter, webrtc_vad
 from meet_copilot.store import Line, SessionStore
 from meet_copilot.translator import Translator, translator_prompt
@@ -13,6 +15,7 @@ from meet_copilot.translator import Translator, translator_prompt
 log = logging.getLogger(__name__)
 
 TRANSLATION_BATCH = 5
+MAX_PENDING_QUESTIONS = 2
 SOURCE_LABELS = {"me": "micrófono", "them": "audio de la llamada"}
 
 
@@ -26,13 +29,15 @@ class LiveSession:
         self.title = title
         self.context = context
         self.store = SessionStore(settings.sessions_dir, title, context)
-        translator_chat, copilot_chat = chats or (
+        translator_chat, copilot_chat, responder_chat = chats or (
             ClaudeChat(runner, settings.translator_model, translator_prompt(context)),
             ClaudeChat(runner, settings.copilot_model, "", max_turns=10**9),
+            ClaudeChat(runner, settings.answer_model, responder_prompt(settings, context)),
         )
         self.translator = Translator(translator_chat)
         self.copilot = Copilot(copilot_chat, settings, context)
-        self.chats = (translator_chat, copilot_chat)
+        self.responder = Responder(responder_chat, settings)
+        self.chats = (translator_chat, copilot_chat, responder_chat)
         self.lines = []
         self.lines_lock = threading.Lock()
         self.segments = queue.Queue()
@@ -41,6 +46,10 @@ class LiveSession:
         self.copilot_signal = threading.Condition()
         self.pending_for_copilot = []
         self.questions = []
+        self.sentence = SentenceBuffer()
+        self.sentence_lock = threading.Lock()
+        self.to_answer = queue.Queue()
+        self.answers = []
         self.capturing = threading.Event()
         self.transcribing = threading.Event()
         self.running = threading.Event()
@@ -57,7 +66,7 @@ class LiveSession:
             thread = threading.Thread(target=self._capture, args=(source,), daemon=True, name=f"capture-{source.name}")
             thread.start()
             self.capture_threads.append(thread)
-        for target in (self._transcribe_loop, self._translate_loop, self._copilot_loop):
+        for target in (self._transcribe_loop, self._translate_loop, self._copilot_loop, self._answer_loop):
             thread = threading.Thread(target=target, daemon=True, name=target.__name__)
             thread.start()
             self.workers.append(thread)
@@ -81,7 +90,8 @@ class LiveSession:
         self.running.clear()
         with self.copilot_signal:
             self.copilot_signal.notify()
-        self.workers[2].join(timeout=120)
+        for thread in self.workers[2:]:
+            thread.join(timeout=120)
         lines = self.snapshot()
         summary = ""
         if lines:
@@ -91,7 +101,7 @@ class LiveSession:
             except Exception as error:
                 log.exception("summary failed")
                 self.bus.publish("error", {"message": f"No se pudo generar el resumen: {error}"})
-        self.store.finish(lines, summary)
+        self.store.finish(lines, summary, self.answers)
         for chat in self.chats:
             chat.close()
         self.bus.publish("summary", {"session": self.store.id, "markdown": summary})
@@ -141,14 +151,27 @@ class LiveSession:
                 log.exception("transcription failed")
                 self.bus.publish("error", {"message": f"Falló la transcripción: {error}"})
                 continue
-            if text:
-                self._add_line(speaker, text, detected or language or "", segment.started_at)
+            detected = detected or language or ""
+            if text and self._expected_language(detected):
+                self._add_line(speaker, text, detected, segment.started_at)
 
     def _is_echo(self, segment):
         return self.activity.speech_ratio(segment.started_at, segment.ended_at) >= self.settings.echo_overlap_ratio
 
+    def _expected_language(self, language):
+        return language in (self.settings.my_language, self.settings.call_language)
+
+    def _repeats_them(self, text, started_at, lines):
+        window = self.settings.echo_window_seconds
+        return any(
+            line.speaker == "them" and abs(started_at - line.started_at) <= window and similar(line.text, text)
+            for line in reversed(lines[-10:])
+        )
+
     def _add_line(self, speaker, text, language, started_at):
         with self.lines_lock:
+            if speaker == "me" and self._repeats_them(text, started_at, self.lines):
+                return None
             line = Line(len(self.lines), speaker, text, language, started_at)
             self.lines.append(line)
         self.bus.publish("line", asdict(line))
@@ -159,7 +182,47 @@ class LiveSession:
         with self.copilot_signal:
             self.pending_for_copilot.append(line)
             self.copilot_signal.notify()
+        if speaker == "them":
+            with self.sentence_lock:
+                sentence = self.sentence.add(line.id, text, started_at)
+            self._evaluate(sentence)
         return line
+
+    def _evaluate(self, sentence):
+        if sentence is None or not is_question(sentence.text):
+            return
+        self.bus.publish("question", {"ids": sentence.line_ids, "text": sentence.text, "started_at": sentence.started_at})
+        while self.to_answer.qsize() >= MAX_PENDING_QUESTIONS:
+            try:
+                stale = self.to_answer.get_nowait()
+            except queue.Empty:
+                break
+            self.bus.publish("question_dismissed", {"ids": stale.line_ids})
+        self.to_answer.put(sentence)
+
+    def _answer_loop(self):
+        while self.running.is_set():
+            with self.sentence_lock:
+                paused = self.sentence.flush_if_paused()
+            self._evaluate(paused)
+            try:
+                sentence = self.to_answer.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            try:
+                answer = self.responder.answer(sentence.text, self.snapshot())
+            except Exception as error:
+                log.exception("responder failed")
+                self.bus.publish("error", {"message": f"No pude sugerir respuesta: {error}"})
+                self.bus.publish("question_dismissed", {"ids": sentence.line_ids})
+                continue
+            if answer is None:
+                self.bus.publish("question_dismissed", {"ids": sentence.line_ids})
+                continue
+            answer.update({"ids": sentence.line_ids, "original": sentence.text, "started_at": sentence.started_at})
+            self.answers.append(answer)
+            self.store.record_answer(answer)
+            self.bus.publish("answer", answer)
 
     def _translate_loop(self):
         while self.transcribing.is_set() or any(t.is_alive() for t in self.workers[:1]) or not self.to_translate.empty():

@@ -1,16 +1,9 @@
 import logging
-import re
 
 from meet_copilot.claude import extract_json
 
 log = logging.getLogger(__name__)
 
-QUESTION_OPENERS = {
-    "what", "how", "why", "when", "where", "who", "which", "whose",
-    "can", "could", "would", "will", "should", "shall",
-    "do", "does", "did", "is", "are", "was", "were", "have", "has",
-    "any", "anything",
-}
 BATCH_LINES = 6
 RECENT_LINES_ON_RESET = 25
 
@@ -37,6 +30,7 @@ Reglas para las sugerencias:
 - Fáciles de leer en voz alta: oraciones cortas y vocabulario simple, en tono profesional y cercano.
 - Básalas en el contexto previo y en lo dicho en la llamada. Nunca inventes cifras, fechas, precios ni compromisos que no estén en el contexto: si falta el dato, sugiere una frase para confirmarlo después o para pedir aclaración.
 - Si no hace falta que {user} hable, sugiere una pregunta inteligente para aportar o profundizar.
+- Las preguntas puntuales ya las contesta al instante otro asistente; tú aporta la visión de conjunto, lo que conviene decir para avanzar y lo que no hay que perder de vista.
 
 Cuando el mensaje empiece con [CONSULTA DE {user_upper}], es una pregunta privada de {user} para ti: respóndela en "nota" (en español, directo) y pon en "sugerencias" frases para usar en la llamada.
 
@@ -61,29 +55,25 @@ SUMMARY_PROMPT = """Transcripción completa de la llamada ([ELLOS] los demás, [
 {transcript}
 </transcripcion>
 
+La transcripción viene de reconocimiento de voz automático: tiene errores, repeticiones y frases cortadas. Interpreta la intención, no el texto literal.
+
 Escribe en español, en markdown:
 ## Resumen
+(un párrafo corto por tema principal)
 ## Decisiones
 ## Pendientes
-(separa los míos de los de ellos, con responsable y fecha si se mencionó)
+(separa los míos de los de ellos, con responsable y fecha si se mencionó; si no hubo, dilo)
+## Dudas que quedaron abiertas
+## Términos y herramientas mencionados
+(término en inglés — qué es, en una línea)
 ## Personas y datos a recordar
 ## Para la próxima llamada
 Sé concreto y no inventes nada que no se haya dicho o que no esté en el contexto."""
 
 
-def looks_like_question(text):
-    stripped = text.strip()
-    if "?" in stripped:
-        return True
-    words = re.findall(r"[a-z']+", stripped.lower())
-    return bool(words) and words[0] in QUESTION_OPENERS and "you" in words
-
-
 def should_consult(pending, seconds_since_last, interval):
     if not pending:
         return False
-    if any(line.speaker == "them" and looks_like_question(line.text) for line in pending):
-        return True
     return len(pending) >= BATCH_LINES or seconds_since_last >= interval
 
 

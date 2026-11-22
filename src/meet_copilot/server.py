@@ -2,6 +2,7 @@ import json
 import logging
 import queue
 import threading
+from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
@@ -9,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from meet_copilot.audio import MicrophoneSource, SystemAudioSource
 from meet_copilot.live import LiveSession
+from meet_copilot.responder import LENGTHS
 from meet_copilot.store import compose_context, list_briefs, list_sessions, read_brief, read_session_file
 
 log = logging.getLogger(__name__)
@@ -42,9 +44,10 @@ class Controller:
             "briefs": list_briefs(self.settings.briefs_dir),
             "sessions": list_sessions(self.settings.sessions_dir),
             "user_name": self.settings.user_name,
+            "answer_length": self.settings.answer_length,
         }
 
-    def start(self, title, brief_name, notes, previous_ids):
+    def start(self, title, brief_name, notes, previous_ids, answer_length=None):
         with self.lock:
             if self.session is not None:
                 raise RuntimeError("Ya hay una llamada en curso")
@@ -56,14 +59,15 @@ class Controller:
             brief = read_brief(self.settings.briefs_dir, brief_name) if brief_name else ""
             context = compose_context(notes, brief, previous)
             self.bus.clear_history()
+            settings = replace(self.settings, answer_length=answer_length) if answer_length in LENGTHS else self.settings
             self.session = self.session_factory(
-                self.settings,
+                settings,
                 self.bus,
                 self.transcriber,
                 self.runner,
                 title or "Llamada",
                 context,
-                self.sources_factory(self.settings),
+                self.sources_factory(settings),
             )
             self.session.start()
             return self.session.store.id
@@ -116,7 +120,11 @@ def make_handler(controller):
                 body = self._body()
                 if url.path == "/api/start":
                     session_id = controller.start(
-                        body.get("title", ""), body.get("brief", ""), body.get("notes", ""), body.get("previous", [])
+                        body.get("title", ""),
+                        body.get("brief", ""),
+                        body.get("notes", ""),
+                        body.get("previous", []),
+                        body.get("answer_length"),
                     )
                     return self._json({"session": session_id})
                 if url.path == "/api/stop":
