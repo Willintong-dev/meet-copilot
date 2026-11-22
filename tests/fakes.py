@@ -9,7 +9,7 @@ LOUD = 8000
 
 
 def settings(tmp_path, **overrides):
-    value = Settings(**{"home": tmp_path, "silence_ms": 90, "copilot_interval_seconds": 0, **overrides})
+    value = Settings(**{"home": tmp_path, "user_name": "Ana", "silence_ms": 90, "copilot_interval_seconds": 0, **overrides})
     value.sessions_dir.mkdir(parents=True, exist_ok=True)
     value.briefs_dir.mkdir(parents=True, exist_ok=True)
     return value

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Traductor y copiloto en vivo para llamadas de Google Meet"
 readme = "README.md"
 authors = [
-    { name = "Willintong-dev", email = "willintong.ramirez@y.uno" }
+    { name = "Willintong-dev", email = "154470943+Willintong-dev@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [

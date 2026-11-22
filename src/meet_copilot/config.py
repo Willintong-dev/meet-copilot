@@ -1,4 +1,5 @@
 import os
+import pwd
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -6,10 +7,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def account_first_name():
+    full_name = pwd.getpwuid(os.getuid()).pw_gecos.strip()
+    return full_name.split()[0] if full_name else "Usuario"
+
+
 @dataclass
 class Settings:
     home: Path = field(default_factory=lambda: Path(os.environ.get("MEET_COPILOT_HOME", PROJECT_ROOT / "data")))
-    user_name: str = "Willintong"
+    user_name: str = field(default_factory=lambda: account_first_name())
     whisper_model: str = "mlx-community/whisper-large-v3-turbo"
     call_language: str = "en"
     my_language: str = "es"

@@ -41,7 +41,7 @@ def test_system_prompt_includes_context_and_user(tmp_path):
     chat = FakeChat("sonnet", advice_or_summary)
     Copilot(chat, settings(tmp_path), "Cliente: Acme")
     assert "Cliente: Acme" in chat.system_prompt
-    assert "[CONSULTA DE WILLINTONG]" in chat.system_prompt
+    assert "[CONSULTA DE ANA]" in chat.system_prompt
 
 
 def test_consult_and_private_question(tmp_path):
@@ -49,7 +49,7 @@ def test_consult_and_private_question(tmp_path):
     copilot = Copilot(chat, settings(tmp_path), "")
     assert copilot.consult([line("them", "How much is it?")], []) == ADVICE
     copilot.ask("¿Qué precio doy?", [line("them", "Pricing?")], [])
-    assert chat.prompts[-1] == "[ELLOS] Pricing?\n[CONSULTA DE WILLINTONG] ¿Qué precio doy?"
+    assert chat.prompts[-1] == "[ELLOS] Pricing?\n[CONSULTA DE ANA] ¿Qué precio doy?"
 
 
 def test_compacts_context_after_max_turns(tmp_path):

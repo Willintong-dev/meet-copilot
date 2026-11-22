@@ -7,13 +7,14 @@ PORT="${MEET_COPILOT_PORT:-8777}"
 
 cd "$ROOT"
 uv sync --python-preference only-managed --quiet
+uv run --quiet python -c "from huggingface_hub import snapshot_download; from meet_copilot.config import load_settings; snapshot_download(load_settings().whisper_model)"
 mkdir -p "$ROOT/data" "$APP/Contents/MacOS"
 cat >"$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleIdentifier</key><string>uno.y.willintong.meet-copilot</string>
+  <key>CFBundleIdentifier</key><string>io.github.willintong-dev.meet-copilot</string>
   <key>CFBundleName</key><string>Meet Copilot</string>
   <key>CFBundleExecutable</key><string>meet-copilot</string>
   <key>CFBundlePackageType</key><string>APPL</string>

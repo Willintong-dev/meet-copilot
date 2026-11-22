@@ -9,7 +9,7 @@ from tests.fakes import ANSWER, FakeChat, answer_questions, settings
 
 def test_prompt_includes_user_language_and_truncated_context(tmp_path):
     prompt = responder_prompt(settings(tmp_path), "§" * 9000)
-    assert "Willintong" in prompt
+    assert "Ana" in prompt
     assert "inglés" in prompt
     assert prompt.count("§") == 4000
 
